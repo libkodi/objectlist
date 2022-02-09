@@ -49,6 +49,19 @@ public class PeriodMap<T> {
 	
 	/**
 	 * 
+	 * 替换
+	 *
+	 * @param key 键
+	 * @param value 值
+	 */
+	public void replace(String key, T value) {
+		synchronized (mutex) {
+			this.value.replace(key, new PeriodMapNode<T>(value));
+		}
+	}
+	
+	/**
+	 * 
 	 * 获取数据
 	 *
 	 * @param key 键
@@ -59,6 +72,11 @@ public class PeriodMap<T> {
 			PeriodMapNode<T> node = value.get(key);
 			
 			if (node != null) {
+				if (node.isIdleTimeout() || node.isAliveTimeout()) {
+					value.remove(key);
+					return null;
+				}
+				
 				node.renew();
 				value.unshift(key, node);
 				return node.getValue();
@@ -142,7 +160,45 @@ public class PeriodMap<T> {
 		}
 	}
 	
-	public Iterator<Entry<String, PeriodMapNode<T>>> iterator() {
-		return value.iterator();
+	/**
+	 * 
+	 * 获取遍历
+	 *
+	 * @return
+	 */
+	public Iterator<Entry<String, T>> iterator() {
+		Iterator<Entry<String, PeriodMapNode<T>>> iter = value.iterator();
+		
+		return new Iterator<Entry<String,T>>() {
+
+			@Override
+			public boolean hasNext() {
+				return iter.hasNext();
+			}
+
+			@Override
+			public Entry<String, T> next() {
+				Entry<String, PeriodMapNode<T>> item = iter.next();
+				return new Entry<String, T>() {
+
+					@Override
+					public String getKey() {
+						return item.getKey();
+					}
+
+					@Override
+					public T getValue() {
+						PeriodMapNode<T> node = item.getValue();
+						return node != null ? node.getValue() : null;
+					}
+
+					@Override
+					public T setValue(T value) {
+						return null;
+					}
+					
+				};
+			}
+		};
 	}
 }

@@ -22,27 +22,28 @@ public class ObjectList<K, V> {
 	}
 	
 	/**
-	 * 往列表后面添加一个对象
-	 * @param key
-	 * @param value
+	 * 向后添加，如果KEY已经存在则替换新值移到最后
+	 * @param key 键名
+	 * @param value 值
 	 */
 	public void push(K key, V value) {
 		synchronized (mutex) {
 			ObjectListNode<K, V> node = new ObjectListNode<K, V>(key, value);
 			
-			if (data.containsKey(key)) { // 已经存在就替换
-				ObjectListNode<K, V> oldNode = data.get(key);
-				node.setNext(oldNode.getNext());
-				node.setPrev(oldNode.getPrev());
-			} else {
-				if (start == null && end == null) { // 如果是第一个添加就修改开始与结尾的指向
-					start = node;
-					end = node;
-				} else { // 否则一律视为向后添加
-					end.setNext(node);
-					node.setPrev(end);
-					end = node;
-				}
+			if (data.containsKey(key)) { // 如果该对象已经存在
+				__remove(key);
+			}
+			
+			node.setPrev(end);
+			
+			if (end != null) {
+				end.setNext(node);
+			}
+			
+			end = node;
+			
+			if (start == null) {
+				start = node;
 			}
 			
 			data.put(key, node);
@@ -50,29 +51,16 @@ public class ObjectList<K, V> {
 	}
 	
 	/**
-	 * 向列表前面添加一个对象
-	 * @param key
-	 * @param value
+	 * 向前添加，如果KEY已经存在则替换新值移到最前
+	 * @param key 键名
+	 * @param value 值
 	 */
 	public void unshift(K key, V value) {
 		synchronized (mutex) {
 			ObjectListNode<K, V> node = new ObjectListNode<K, V>(key, value);
 			
 			if (data.containsKey(key)) { // 如果该对象已经存在
-				ObjectListNode<K, V> oldNode = data.get(key);
-				
-				if (oldNode != start) { // 并且不为开头的对象，则先从当前列表中移除该对象
-					ObjectListNode<K, V> next = oldNode.getNext();
-					ObjectListNode<K, V> prev = oldNode.getPrev();
-					
-					if (prev != null) {
-						prev.setNext(next);
-					}
-					
-					if (next != null) {
-						next.setPrev(prev);
-					}
-				}
+				__remove(key);
 			}
 			
 			// 将对象添加到列表头
@@ -93,58 +81,84 @@ public class ObjectList<K, V> {
 	}
 	
 	/**
+	 * 替换
+	 * @param key 键名
+	 * @param value 值
+	 */
+	public V replace(K key, V value) {
+		synchronized (mutex) {
+			if (data.containsKey(key)) {
+				ObjectListNode<K, V> node = data.get(key);
+				node.setValue(value);
+				return value;
+			} else {
+				return null;
+			}
+		}
+	}
+	
+	/**
 	 * 移除对象
-	 * @param key
+	 * @param key 键名
 	 * @return V
 	 */
 	public V remove(K key) {
 		synchronized (mutex) {
-			if (data.containsKey(key)) {
-				ObjectListNode<K, V> node = data.get(key);
+			return __remove(key);
+		}
+	}
+	
+	/**
+	 * 移除对象
+	 * @param key 键名
+	 * @return V
+	 */
+	private V __remove(K key) {
+		if (data.containsKey(key)) {
+			ObjectListNode<K, V> node = data.get(key);
+			
+			if (node != end && node != start) { // 不为开始与结尾
+				ObjectListNode<K, V> next = node.getNext();
+				ObjectListNode<K, V> prev = node.getPrev();
 				
-				if (node != end && node != start) { // 不为开始与结尾
-					ObjectListNode<K, V> next = node.getNext();
-					ObjectListNode<K, V> prev = node.getPrev();
-					
-					prev.setNext(next);
-					next.setPrev(prev);
-					
-					return data.remove(key).getValue();
-				}
-				
-				if (node == end) { // 如果为移除末尾对象
-					ObjectListNode<K, V> prev = node.getPrev();
-					
-					if (prev == null) {
-						end = null;
-					} else {
-						prev.setNext(null);
-						end = prev;
-					}
-				}
-				
-				if (node == start) { // 如果为移除开始对象
-					ObjectListNode<K, V> next = node.getNext();
-					
-					if (next == null) {
-						start = null;
-					} else {
-						next.setPrev(null);
-						start = next;
-					}
-				}
+				prev.setNext(next);
+				next.setPrev(prev);
 				
 				return data.remove(key).getValue();
 			}
+			
+			if (node == end) { // 如果为移除末尾对象
+				ObjectListNode<K, V> prev = node.getPrev();
+				
+				if (prev == null) {
+					end = null;
+				} else {
+					prev.setNext(null);
+					end = prev;
+				}
+			}
+			
+			if (node == start) { // 如果为移除开始对象
+				ObjectListNode<K, V> next = node.getNext();
+				
+				if (next == null) {
+					start = null;
+				} else {
+					next.setPrev(null);
+					start = next;
+				}
+			}
+			
+			return data.remove(key).getValue();
 		}
 		
 		return null;
 	}
-	
+
 	/**
 	 * 获取对象
-	 * @param key
-	 * @return
+	 * @param key 键名
+	 * @return V
 	 */
 	public V get(K key) {
 		ObjectListNode<K, V> node = data.get(key);
@@ -158,7 +172,7 @@ public class ObjectList<K, V> {
 	
 	/**
 	 * 判断是否为空列表
-	 * @return
+	 * @return true/false
 	 */
 	public boolean isEmpty() {
 		synchronized (mutex) {
@@ -179,8 +193,8 @@ public class ObjectList<K, V> {
 	
 	/**
 	 * 判断是否包含指定的key
-	 * @param key
-	 * @return
+	 * @param key 键名
+	 * @return true/false
 	 */
 	public boolean containsKey(K key) {
 		synchronized (mutex) {
@@ -190,7 +204,7 @@ public class ObjectList<K, V> {
 	
 	/**
 	 * 获取遍历
-	 * @return
+	 * @return Iterator<Entry<K, V>>
 	 */
 	public Iterator<Entry<K, V>> iterator() {
 		return iterator(false);
@@ -199,7 +213,7 @@ public class ObjectList<K, V> {
 	/**
 	 * 获取遍历
 	 * @param back 是否反向遍历
-	 * @return
+	 * @return Iterator<Entry<K, V>>
 	 */
 	public Iterator<Entry<K, V>> iterator(boolean back) {
 		return new Iterator<Entry<K, V>>() {
